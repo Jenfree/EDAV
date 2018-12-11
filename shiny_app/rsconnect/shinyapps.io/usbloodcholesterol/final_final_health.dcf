@@ -1,0 +1,13 @@
+name: final_final_health
+title: final_final_health
+username:
+account: usbloodcholesterol
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 610182
+bundleId: 1752041
+url: https://usbloodcholesterol.shinyapps.io/final_final_health/
+when: 1544419207.82632
+asMultiple: FALSE
+asStatic: FALSE
+ignoredFiles: final_df.csv
