@@ -1,0 +1,541 @@
+---
+title: "Health factors that are associated with blood cholesterol level in USA"
+author: "Jingwen Guo, Yinan Ling, Siyuan Shi, Ziyao Zhang"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Nowadays, health awareness is more and more rooted in people's minds. A healthy lifestyle could improve health conditions and prevent many diseases. One major and common health problem is high blood cholesterol level, where billions of people are suffering. High blood cholesterol level could cause atherosclerosis which may lead to chest pain, heart attack, stroke and other various diseases. People generally believe that less alcohol and tobacco consumption and a healthy diet could prevent having a high blood cholesterol level. Therefore, our team is trying to find whether there are indeed relationships between blood cholesterol level and those factors by analyzing a health-risk-related- dataset collected from over 400,000 adults in the United States. This analysis can provide another aspect of how some of the people's lifestyle affecting their blood cholesterol level, which could help people rethink and redefine their daily behaviors for controlling their blood cholesterol levels. Also, the study could help hospitals identify high blood-cholesterol-disease-risk groups for preventive treatment.
+
+Team Contribution:
+
+* Ziyao Zhang:  Blood cholesterol variable analysis
+* Siyuan Shi: Diet-related variable analysis
+* Yinan Ling: Smoke variable analysis
+* Jingwen Guo: Alcohol variable analysis, interactive component
+
+github: [https://github.com/Jenfree/EDAV](https://github.com/Jenfree/EDAV) 
+
+All the team members contributed to coming up ideas, editing text and layout and adjusting graphs. 
+
+```{r}
+library(ggplot2)
+library(GGally)
+library(grid)
+library(RColorBrewer)
+library(extracat)
+library(gridExtra)
+library(tidyverse)
+library(dplyr, warn.conflicts = FALSE)
+library(data.table)
+library(usmap)
+```
+
+## Description of data
+
+The data is collected by the Behavioral Risk Factor Surveillance System (BRFSS), which is the nation's premier system of health-related telephone surveys that collect data of each state in the U.S. This system was established in 1984 started with fifteen states. Now, it's collecting data in all 50 states as well as the District of Columbia and three U.S. territories. During each year's survey, BRFSS surveyed over 400,000 adults. The survey is related to health-related questions, chronic health conditions, and use of preventive services. There are over 300 variables in each year's dataset. The variables vary in a broad range, such as demographics, diet habits, exercise habits, health-related behaviors, mental-health status and so on. Our team accesses the data directly from the BRFSS website, which posts the official dataset and its codebook for every year's survey. 
+
+```{r}
+DT <- fread('2015.csv')
+```
+
+## Analysis of data quality
+```{r}
+allvariable<-DT[,c('TOLDHI2','FTJUDA1_','FRUTDA1_','BEANDAY_','_VEGESUM','_SMOKER3','_STATE',"SEX", "_RFDRHV5","AVEDRNK2",'EDUCA','_AGE_G',"_RFBMI5")]
+visna(allvariable, sort = "c")
+```
+
+We plot the missing data information of all the used variables. From the graph, we can see that variable **AVEDRINK** (which represents the number of drinks a person has per week) is missing half of the rows. However, the dataset contains more than 440,000 rows; the non-missing value has more than 200,000 rows, which can still be considered as containing enough samples to derive certain information of the whole population. Other variables are missing less than a quarter of the whole dataset. Moreover, one of the reasons that those variables are missing is because that some people don't need to fill those sections, which means that their missing information in those sections would not affect our analysis. Hence, our data is legit for conducting the analysis.
+
+## Main analysis
+#### 1. Blood cholesterol level
+```{r}
+blood_checked<-DT[,c("TOLDHI2")]
+blood_checked[is.na(blood_checked)] <- 0
+
+blood_checked$TOLDHI2=factor(blood_checked$TOLDHI2)
+levels(blood_checked$TOLDHI2)=c("Not asked or Missing", "Yes", "No", "Don't Know/Not Sure", "Refused")
+ggplot(blood_checked, aes(x = fct_infreq(TOLDHI2), fill = fct_infreq(TOLDHI2))) +geom_bar(width = 1, colour = "black", show.legend = FALSE) +xlab("TOLDHI2")+ggtitle("Distribution of blood cholesterol level")
+```
+
+**TOLDHI2** is a categorical variable that indicates whether the surveyee is diagnosed of having a high blood cholesterol level. 
+First, we want to see the distribution of this variable by using a bar chart. We can see that this variable have five categories, not asked or missing, yes, no, don't know/not sure and refused to answer. We can see that among the total surveyees, people who have high blood cholesterol level is less than people who don't have a high blood cholesterol level, but their difference is not very distinct, which means that of all the people who answered yes or no, roughly more than 40% of people have a high blood cholesterol level. This can be considered a large percent amount which indicates that the high blood cholesterol level issue is somewhat prevalent right now.
+
+```{r}
+age<-DT[,c("_AGE_G")]
+colnames(age)[1] <- "AGE"
+age$AGE=factor(age$AGE)
+levels(age$AGE)=c("18-24","25-34","35-44","45-54","55-64","65+")
+  
+ch_age <- cbind(blood_checked, age)
+ch_age<-ch_age%>% group_by(TOLDHI2, AGE) %>% summarize(count=n())  
+age_count<-age %>% group_by(AGE) %>% summarize(count=n())
+list4<- rep(age_count$count,length(ch_age$AGE))
+list5 <- data.frame(ch_age,total = list4)
+list5["percentage"] <- list5$count/list5$total 
+
+ggplot(list5, aes(x=AGE, y=list5$percentage/10)) +
+  geom_bar(stat='identity')+facet_wrap(. ~ TOLDHI2)+coord_cartesian(ylim=c(0,0.6))+ylab("Percentage") +xlab('Age Group')+ggtitle("Six age group faceted by blood cholesterol")
+```
+
+Then, we use the age variables to group surveyees into six different age groups, which include 18-24, 25-34, 35-44, 45-54, 55-64, and 65+. The distribution of blood cholesterol level within these age groups is shown in the bar chart along age variables faceted by blood cholesterol indicator variable. One noteworthy finding is that the older the people are, the higher the percentage of people who have high blood cholesterol level. One possible explanation is that as people getting old, their health conditions decline, which matches people's common sense about how younger people are generally stronger and healthier.
+
+```{r}
+bmi<-DT[,c("_RFBMI5")]
+colnames(bmi)[1] <- "BMI"
+bmi$BMI=factor(bmi$BMI)
+levels(bmi$BMI)=c("Not Obese","Obese","Don't Know/Missing/Refuse")
+
+gender<-DT[,c("SEX")]
+gender$SEX=factor(gender$SEX)
+levels(gender$SEX)=c("male","female")
+
+ch_sex_bmi <- cbind(blood_checked,gender,bmi)
+
+fills6 <- rev(brewer.pal(6, 'RdBu'))
+
+YN_v2<-rbind(ch_sex_bmi[ch_sex_bmi$TOLDHI2=='Yes',],ch_sex_bmi[ch_sex_bmi$TOLDHI2=='No',])
+YN_v2$TOLDHI2=factor(YN_v2$TOLDHI2)
+levels(YN_v2$TOLDHI2)=c("YES","NO")
+
+YN_v3<-rbind(YN_v2[YN_v2$BMI=='Not Obese',],YN_v2[YN_v2$BMI=='Obese',])
+YN_v3$BMI=factor(YN_v3$BMI)
+levels(YN_v3$BMI)=c("Not Obese","Obese")
+vcd::mosaic(TOLDHI2 ~ SEX + BMI,YN_v3 ,
+            direction = c("v", "v", "h"),
+            gp = gpar(fill = rev(fills6))) 
+
+```
+
+Then we use the gender variable and obesity variable to see the distribution of people who have high blood cholesterol level within those two variables. Obesity variable is a categorical variable with levels of "obese" and "not obese." From the mosaic plot, we can see that the proportion of people who have a high blood cholesterol level within two genders and two obesity status is almost the same, which means that gender and obesity seem not to correlate with the blood cholesterol level.
+
+#### 2. Diet: vegetable, fruit, juice, and bean
+```{r}
+df_15=DT[,c('TOLDHI2','FTJUDA1_','FRUTDA1_','BEANDAY_','_VEGESUM')]
+df_15$TOLDHI2 <- as.factor(df_15$TOLDHI2)
+df_15 <- df_15 %>% na.omit()
+```
+
+People believe that a good diet habit could result in a healthy body. In this section, the objective is to find the correlation between diet options and blood cholesterol level, such that this study could provide some insights on diet choices.
+
+The dependent variable is **TOLdHI2**, which is a categorical variable that represents whether people has high blood cholesterol level. In this study, the four types of food that are presumed to reduce the risk of high blood cholesterol include juice, fruits, beans, and vegetables. The data in the four food columns are continuous variables that represent the amount of daily consumption. Therefore, the subset dataset includes the four food columns as continuous independent variables and the cholesterol column as a categorical dependent variable.
+
+As shown in the missing pattern graph, there are less than 10% of missing values in each food column. Also, there is an interesting missing pattern. The data in the four food columns are usually missing together; it may because that these questions are too similar so that an interviewee may choose to answer all or none of them. These observations that miss all the food information should be removed. Besides this observation, other missing patterns seem random and occur at a very low frequency. Also, since the dataset contains many (roughly 500K) observations, it makes sense to remove the observations that have missing values inside to make the dataset clean and analysis robust.
+
+```{r}
+df_15 <- df_15 %>% gather('Food','value',2:5,-1)
+df_15$Food <- as.factor(df_15$Food)
+df_15$Food <- df_15$Food %>% fct_recode('Juice' = 'FTJUDA1_',
+                     'Fruit' = 'FRUTDA1_',
+                     'Bean' = 'BEANDAY_',
+                     'Vegetable' = '_VEGESUM')
+colnames(df_15) <- c('Cholesterol','Food','Value')
+```
+
+Then, a gather function can tidy the dataset to group the four food labels into one column and the corresponding values into the other column. The factor levels are “recoded” as **Juice**, **Fruit**, **Bean**, and **Vegetable**, and the column names are renamed as **Cholesterol** (which represents whether the interviewee has high blood cholesterol), **Food** (which contains four levels of diet options), and **Value** (which represents the daily consumption amount of the corresponding diet).
+
+```{r}
+df_15 %>% ggplot(aes(x = reorder(Food, Value, median), y = Value, color=Food))+geom_boxplot()+coord_flip()+
+  labs(title = 'The distributions of daily consumed food', x = '', y = 'Amount')
+```
+
+
+The next step is to visualize the distribution of daily consumptions by using the boxplot, which is extremely efficient in spotting outliers. The figure shows that some outliers are impossible; an amount of more than one thousand is too extreme to be true when the median is less than 100. Therefore, it makes sense to remove those outliers because they may be mistakes. The "fence" is chosen at an amount of 350.
+
+```{r }
+df_15$Value[df_15$Value > 350] <- NA
+df_15 <- df_15 %>% na.omit()
+df_15 %>% ggplot(aes(x = reorder(Food, Value, median), y = Value, color=Food))+geom_boxplot()+coord_flip()+
+  labs(title = 'The distributions of daily consumed food with less outliers', x = '', y = 'Amount')
+```
+
+
+After removing the outliers, the distributions of the daily consumptions are redrawn to demonstrate the data better.
+
+* Vegetable has the highest median, followed by fruit and bean, and juice comes last. The rank seems to reflect people's diet behaviors since vegetables are usually served in the entries while fruits are considered an "add-on." Beans are a perfect side order, and some crazy juice lovers may drink juice whenever they feel thirsty.
+* People seem to approximate their consumption amount to the nearest tens or hundreds.
+
+The next step is to study the correlation between blood cholesterol level and each food type. Take the juice as an example. The objective is to visualize the effect of juice on reducing the risk of high blood cholesterol level. Therefore, a good indicator would be the probability of having high blood cholesterol level conditioned on the juice-consumption pattern; juice would be effective if the probability of high blood cholesterol level is low when the consumption of juice is high. Hence, the following analysis first subsets the dataset to select only the juice. Then, since the consumption amount is continuous, the next step is to group these data into three categories, which are **Juice Hater** who never drinks juice, **Neutral** who drinks less than the median amount, and **Juice Lover** who drinks more than the median amount. Lastly, the conditional probability of high blood cholesterol level is drawn according to the three juice-consumption groups.
+
+It is interesting to observe that the juice lovers and neutral groups are less likely to have high blood cholesterol level than the juice haters who never drink juice.
+
+The same kind of analysis applies to the other three food types. The results are shown below.
+
+
+```{r }
+df_15 <- df_15 %>% subset(df_15$Cholesterol!=7) %>% subset(df_15$Cholesterol!=9)
+df_juice <- df_15 %>% subset(df_15$Food=='Juice')
+df_juice$Value[df_juice$Value <= 0.1] <- 0
+df_juice$Value[df_juice$Value > 0.1 & df_juice$Value <=6] <- 1
+df_juice$Value[df_juice$Value > 6] <- 2
+df_juice$Value[df_juice$Value == 0] <- 'Juice Hater'
+df_juice$Value[df_juice$Value == 1] <- 'Neutral'
+df_juice$Value[df_juice$Value == 2] <- 'Juice Lover'
+df_juice$Value <- as.factor(df_juice$Value)
+Juice_counts_1 <- data.frame(df_juice %>% subset(df_juice$Cholesterol==1) %>% group_by(Cholesterol,Value) %>% summarise(Freq=n()))
+Juice_counts_2 <- data.frame(df_juice %>% subset(df_juice$Cholesterol==2) %>% group_by(Cholesterol,Value) %>% summarise(Freq=n()))
+Juice <- merge(Juice_counts_1, Juice_counts_2, by = 'Value') %>% select(-Cholesterol.x,-Cholesterol.y)
+colnames(Juice) <- c('Type','Yes','No')
+Juice$Type <- Juice$Type %>% fct_relevel('Juice Hater','Neutral','Juice Lover')
+Juice <- Juice %>% mutate(percentage = 100*Yes/(Yes+No))
+g_juice <- Juice %>% ggplot(aes(x=Type,y=percentage))+geom_col(fill='orange1')+coord_cartesian(ylim=c(1,100))+
+  labs(x = 'Juice', y = 'Percentage')
+g_juice
+```
+
+```{r }
+df_fruit <- df_15 %>% subset(df_15$Food=='Fruit')
+df_fruit$Value[df_fruit$Value <=0.1] <- 0
+df_fruit$Value[df_fruit$Value > 0.1 & df_fruit$Value <=90] <- 1
+df_fruit$Value[df_fruit$Value > 90] <- 2
+df_fruit$Value[df_fruit$Value == 0] <- 'Fruit Hater'
+df_fruit$Value[df_fruit$Value == 1] <- 'Neutral'
+df_fruit$Value[df_fruit$Value == 2] <- 'Fruit Lover'
+df_fruit$Value <- as.factor(df_fruit$Value)
+Fruit_counts_1 <- data.frame(df_fruit %>% subset(df_fruit$Cholesterol==1) %>% group_by(Cholesterol,Value) %>% summarise(Freq=n()))
+Fruit_counts_2 <- data.frame(df_fruit %>% subset(df_fruit$Cholesterol==2) %>% group_by(Cholesterol,Value) %>% summarise(Freq=n()))
+Fruit <- merge(Fruit_counts_1, Fruit_counts_2, by = 'Value') %>% select(-Cholesterol.x,-Cholesterol.y)
+colnames(Fruit) <- c('Type','Yes','No')
+Fruit$Type <- Fruit$Type %>% fct_relevel('Fruit Hater','Neutral','Fruit Lover')
+Fruit <- Fruit %>% mutate(percentage = 100*Yes/(Yes+No))
+g_fruit <- Fruit %>% ggplot(aes(x=Type,y=percentage))+geom_col(fill='tomato1')+coord_cartesian(ylim=c(1,100))+
+  labs(x = 'Fruit', y = 'Percentage')
+g_fruit
+```
+
+
+Similar to the juice, more consumption of fruit indicates less porportion of people having a high blood cholesterol level.
+
+```{r }
+df_bean <- df_15 %>% subset(df_15$Food=='Bean')
+df_bean$Value[df_bean$Value <= 0.1] <- 0
+df_bean$Value[df_bean$Value > 0.1 & df_bean$Value <=16] <- 1
+df_bean$Value[df_bean$Value > 16] <- 2
+df_bean$Value[df_bean$Value == 0] <- 'Bean Hater'
+df_bean$Value[df_bean$Value == 1] <- 'Neutral'
+df_bean$Value[df_bean$Value == 2] <- 'Bean Lover'
+df_bean$Value <- as.factor(df_bean$Value)
+Bean_counts_1 <- data.frame(df_bean %>% subset(df_bean$Cholesterol==1) %>% group_by(Cholesterol,Value) %>% summarise(Freq=n()))
+Bean_counts_2 <- data.frame(df_bean %>% subset(df_bean$Cholesterol==2) %>% group_by(Cholesterol,Value) %>% summarise(Freq=n()))
+Bean <- merge(Bean_counts_1, Bean_counts_2, by = 'Value') %>% select(-Cholesterol.x,-Cholesterol.y)
+colnames(Bean) <- c('Type','Yes','No')
+Bean$Type <- Bean$Type %>% fct_relevel('Bean Hater','Neutral','Bean Lover')
+Bean <- Bean %>% mutate(percentage = 100*Yes/(Yes+No))
+g_bean <- Bean %>% ggplot(aes(x=Type,y=percentage))+geom_col(fill='burlywood')+coord_cartesian(ylim=c(1,100))+
+  labs(x = 'Bean', y = 'Percentage')
+g_bean
+```
+
+
+Unlike the case of juice and fruits, the consumption of beans seem to be unrelated to the risk of high blood cholesterol level.
+
+```{r }
+df_vege <- df_15 %>% subset(df_15$Food=='Vegetable')
+df_vege$Value[df_vege$Value <=0.1] <- 0
+df_vege$Value[df_vege$Value > 0.1 & df_vege$Value <=155] <- 1
+df_vege$Value[df_vege$Value > 155] <- 2
+df_vege$Value[df_vege$Value == 0] <- 'Vegetable Hater'
+df_vege$Value[df_vege$Value == 1] <- 'Neutral'
+df_vege$Value[df_vege$Value == 2] <- 'Vegetable Lover'
+df_vege$Value <- as.factor(df_vege$Value)
+vege_counts_1 <- data.frame(df_vege %>% subset(df_vege$Cholesterol==1) %>%
+                              group_by(Cholesterol,Value) %>% summarise(Freq=n()))
+vege_counts_2 <- data.frame(df_vege %>% subset(df_vege$Cholesterol==2) %>%
+                              group_by(Cholesterol,Value) %>% summarise(Freq=n()))
+vege <- merge(vege_counts_1, vege_counts_2, by = 'Value') %>%
+  select(-Cholesterol.x,-Cholesterol.y)
+colnames(vege) <- c('Type','Yes','No')
+vege$Type <- vege$Type %>% fct_relevel('Vegetable Hater','Neutral','Vegetable Lover')
+vege <- vege %>% mutate(percentage = 100*Yes/(Yes+No))
+g_vege <- vege %>% ggplot(aes(x=Type,y=percentage))+geom_col(fill='lightgreen')+coord_cartesian(ylim=c(1,100))+
+  labs(x = 'Vegetable', y = 'Percentage')
+g_vege
+```
+
+Surprisingly, the consumption of vegetables seems to be unrelated with the risk of high blood cholesterol, since vegetable lover and vegetable hater have about the same proportion of people with high blood cholesterol level.
+
+#### 3. Tobacco
+```{r}
+data_2015<-DT[,c("_SMOKER3","TOLDHI2")]
+
+#remove unkown smoke status
+colnames(data_2015)[1] <- "X_SMOKER3"
+data_2015_update = data_2015 %>% subset(data_2015$X_SMOKER3!=9)
+                                          
+#leave only yes or no TOLDHI2
+data_2015_update = data_2015_update %>% subset(data_2015_update$TOLDHI2!=7)
+data_2015_update = data_2015_update %>% subset(data_2015_update$TOLDHI2!=9)
+#find the total people of each smoke status
+df_1 = data.frame(table(data_2015_update$X_SMOKER3))
+
+#find total people in each smoke status when TOLDHI2 is yes
+data_2015_update = data_2015_update %>% subset(data_2015_update$TOLDHI2==1)
+df_2 = data.frame(table(data_2015_update$X_SMOKER3, data_2015_update$TOLDHI2))
+
+#ceate a new data frame
+df = data.frame(df_1[,ncol(df_1)],df_2[,ncol(df_2)])
+colnames(df) = c('total_smokers','total_sick_smokers')
+Percentage = df$`total_sick_smokers`/df$`total_smokers`
+smoker_status = c('Everyday Smoker','Someday Smoker', 'Former Smoker', 'Non Smoker')
+df = cbind(df,Percentage)
+df = cbind(df,smoker_status)
+
+#1--Everyday smoker  2--Someday smoker 3--Former smoker  4--Non smoker  9--Don't know/Missing
+ggplot(aes(smoker_status, total_smokers),data=df) + geom_bar(stat = 'identity', fill = "#FF6666") + labs(title = 'Distribution of Four-level Smoker Status') + xlab('Smoke Status') + ylab('Count') + theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+Next, our team analyzes smoking factor, which may be a contributed component over blood cholesterol level. **X_SMOKER3** variable indicates four levels of smoker status. '1' represents smokers who now smoke every day. '2' represents smokers who now smoke some days. '3' represents former smokers, and '4' represents those who never smoke. Also, some people do not know or refuse to answer; it is recorded as '9'. Since we are interested in how smoking is related to **TOLDHI2** (blood cholesterol variable), we delete the missing values and only leave the people with high blood cholesterol level. First, we plot the bar chart to get the distribution of **X_SMOKER3**. We find that majority never smoke while few people smoke some days. After cleaning the data, we attempt to find the relation between smoking and high blood cholesterol by computing the percentage of high-blood-cholesterol patients among each smoker status. 
+
+(The analysis between smoking and blood cholesterol is put in the Executive Summary section to reduce the redundancy of repeating our findings).
+
+#### 4. Alcohol
+
+Alcohol drinking could be a potential factor for incurring high blood cholesterol; it is believed that alcohol is generally bad for health. Therefore, the objective in this section is to understand the correlation between alcohol consumption and the risk of high blood cholesterol. Hence, the major independent variable in this section is **X_RFBING5**, which is a categorical variable that represents whether the surveyee is a heavy drinker. The dependent variable is **TOLDHI2**. Other auxiliary variables include **SEX** and **X_STATE**, which represents the sex and state information of the surveyee, respectively. Geographical information may be correlated with high blood cholesterol because of climate, lifestyle, etc. The variable types include both numbers and characters.
+
+```{r}
+alco_df <- as.data.frame(DT)
+variabls <- c("_STATE","SEX","MAXDRNKS","_AGEG5YR", "_AGE65YR", "_AGE80", "AVEDRNK2","_AGE_G","DRNKANY5", "DROCDY3_", "_RFBING5", "_DRNKWEK", "_RFDRHV5","TOLDHI2" )
+
+alco_df <- alco_df[variabls]
+colnames(alco_df)[1] <- "X_STATE"
+colnames(alco_df)[11] <- "X_RFBING5"
+colnames(alco_df)[12] <- "X_DRNKWEK"
+colnames(alco_df)[13] <- "X_RFDRHV5"
+
+alco_df$X_RFDRHV5[alco_df$X_RFDRHV5 == 1] <- 'No'
+alco_df$X_RFDRHV5[alco_df$X_RFDRHV5 == 2] <- 'Yes'
+alco_df$X_RFDRHV5[alco_df$X_RFDRHV5 == 9] <- 'Unknown'
+alco_df$TOLDHI2[alco_df$TOLDHI2 == 1] <- 'Yes'
+alco_df$TOLDHI2[alco_df$TOLDHI2 == 2] <- 'No'
+alco_df$TOLDHI2[alco_df$TOLDHI2 == 7] <- 'Unknown'
+alco_df$TOLDHI2[alco_df$TOLDHI2 == 9] <- 'Refused'
+```
+
+
+Since our team wants to analyze the relationship between alcohol and blood cholesterol, we start by first plotting the percentage of heavy drinkers in each state. To get the percentage, the numbers of heavy drinkers and surveyees in each state are counted and then divided.
+
+```{r}
+#number of people in each state
+state_date <- alco_df%>% group_by(X_STATE)%>% 
+    summarize(total_state = n())
+
+#number of drinkers in each state
+percent_drinker_state <- alco_df[alco_df$X_RFDRHV5 =='Yes',] %>% group_by(X_STATE) %>% 
+    summarize(n_heavy_drinkers = n())
+
+#combine the num of drinkers and number people in each state 
+join_table <- percent_drinker_state  %>% left_join(state_date,by=c("X_STATE" = "X_STATE") ) 
+join_table$percent<- 100*(percent_drinker_state$n_heavy_drinkers /join_table$total_state)
+
+statepop$fips <- as.integer(statepop$fips)
+overall_df<- join_table %>% left_join(statepop,by=c("X_STATE" = "fips") ) 
+colnames(overall_df)[colnames(overall_df) == 'full'] <- 'state'
+
+#Percent of heavy drinkers in United States by states in 2015
+plot_usmap(data = overall_df, values = "percent", lines = "black") + 
+  scale_fill_continuous(
+         low = "#CCCCE7", high = "#00008B", name = "Percent of heavy drinkers (2015)"
+       ) + theme(legend.position = "right")+
+  ggtitle("Percent of heavy drinkers in United States by states in 2015")
+
+```
+
+The map shows that
+
+* On average, people that live in the northern states tend to drink more than those from the southern states. A hypothesis is that temperature may be correlated with drinking behaviors, since the north is generally colder than the south, and drinking can bring warmth to people. 
+* Some popular states (cities) for tourism, such as Hawaii, Florida, and Las Vegas, have a higher percentage of heavy alcohol consumption than their nearby regions. A hypothesis is that those cities/states have a lot of activities including drinking frequently. So different lifestyles may be correlated with drinking behaviors.
+
+The next step is to observe if the map of high-blood-cholesterol people matches the map of heavy drinkers. The next chode chunk plots the percentage of people who have high blood cholesterol by each state.
+
+
+```{r}
+#number of high cholesterol in each state
+chol_state <- alco_df[alco_df$TOLDHI2 =='Yes',] %>% drop_na(TOLDHI2)%>% group_by(X_STATE)%>% 
+    summarize(cho_n_state = n())
+
+#combine the num of high cholesterol people and number people in each state 
+join_table_3 <- chol_state  %>% left_join(state_date,by=c("X_STATE" = "X_STATE") ) 
+join_table_3$percent<- 100*(join_table_3$cho_n_state /join_table_3$total_state)
+
+#join the statepop data
+join_table_3<- join_table_3 %>% left_join(statepop,by=c("X_STATE" = "fips") ) 
+colnames(join_table_3)[colnames(join_table_3) == 'full'] <- 'state'
+
+plot_usmap(data = join_table_3, values = "percent", lines = "black") + 
+  scale_fill_continuous(
+         low = "#E5CCCC", high = "#7e0000", name = "Percent of high cholesterol (2015)"
+       ) + theme(legend.position = "right")+
+  ggtitle("Percent of people has high cholestrol  by state in 2015")
+
+```
+
+The distribution of people who have high blood cholesterol is different from the distribution of heavy drinkers. The percentage of people who have high blood cholesterol is higher in the southeast and northeast regions. This suggests that some other factors are more influential over blood cholesterol level than drinking. To prove this, an approach is to plot the probability of high cholesterol level conditioned on heavy drinkers; this approach will eliminate the effect of drinking behaviors and emphasize the effect of other factors.
+
+```{r}
+#The rows that are heavy drinkers  
+temp <- alco_df[alco_df$X_RFDRHV5 =='Yes',] %>% drop_na(X_RFDRHV5)
+ 
+#number of heavy drinkers by state 
+heavy_state <- temp%>% group_by(X_STATE)%>% 
+    summarize(heavy_n_state = n())
+
+
+#number of heavy drinkers has high cholestrol in each state
+alco_state <- temp[temp$TOLDHI2 =='Yes',] %>% group_by(X_STATE) %>% 
+    summarize(n_cho_drinkers = n())
+
+#percent of people has high cholestrol that are heavy drinkers by state
+join_table_2 <- alco_state  %>% left_join(heavy_state,by=c("X_STATE" = "X_STATE") ) 
+join_table_2$percent<- 100*(join_table_2$n_cho_drinkers /join_table_2$heavy_n_state)
+
+#join statepop data to plot the graph
+join_table_2<- join_table_2 %>% left_join(statepop,by=c("X_STATE" = "fips") ) 
+colnames(join_table_2)[colnames(join_table_2) == 'full'] <- 'state'
+
+plot_usmap(data = join_table_2, values = "percent", lines = "black") + 
+  scale_fill_continuous(
+         low = "#d6dfd6", high = "#004b00",name = "Percent of heavy drinkers has high cholestrol (2015)"
+       ) + theme(legend.position = "right")+
+  ggtitle("Percent of people has high cholestrol that are heavy drinkers by state in 2015")
+```
+
+The percentages are not uniformly distributed on the map. For example, a heavy drinker from California is less likely to have high cholesterol than a heavy drinker from Florida. This may imply that factors other than alcohol consumption are important.
+
+However, we want to further explore the relationship between drinking behavior and blood cholesterol level. Then we use variable **AVEDRNK2**, which is a continuous variable that represents the average alcoholic drinks per day in the past 30 days. A boxplot and a histogram are used to visualize the distribution of this variable.
+
+```{r}
+#drinker and the number of drinks per week
+drink_wek <- alco_df$AVEDRNK2 
+boxplot(drink_wek, col = 'lightBlue', main = "Number of drinks per week")
+summary(drink_wek)
+#median = 2.00
+#mean = 3.49
+#1sr qu = 1.00
+#3rd qu = 2.00
+var2 <- c('TOLDHI2','AVEDRNK2','SEX')
+temp4 <- alco_df[,c('TOLDHI2','AVEDRNK2','SEX')]
+
+#remove na values and visal outliers i.e   77 Unknow & 99 Refused & Blanks missing
+temp4 <- temp4 %>% drop_na(AVEDRNK2)
+temp4<- temp4[temp4$AVEDRNK2 <= 76,]
+
+ggplot(temp4, aes(x=AVEDRNK2)) + 
+  geom_bar(stat="count", width=0.4)    #bar chart
+
+```
+
+The following code chunk is used for converting the continuous variable into a categorical variable by grouping people into the light-drinker group, moderate-drinker group, and heavy-drinker group. The distribution of the three groups are shown below. We can see that a lot of people have light and moderate drinking habits. There are still over 12,000 people who are considered as heavy drinkers.
+
+```{r}
+#bar chart frequence of the drinker.
+
+temp4$type[temp4$AVEDRNK2 == 1] <- 'Light drinking'
+temp4$type[temp4$AVEDRNK2 < 5 & temp4$AVEDRNK2 > 1] <- 'Moderate drinking'
+temp4$type[temp4$AVEDRNK2 >= 5] <- 'Heavy drinking'
+
+temp4$type = factor(temp4$type, levels = c("Heavy drinking", "Moderate drinking","Light drinking"))
+ggplot(temp4, aes(x=type)) + 
+  geom_bar(stat="count", width=0.4)    #bar chart
+
+#number of drinking people in each type
+type_drink <- temp4 %>% group_by(type,SEX)%>% 
+    summarize(total_type = n())
+
+#number of people drink and has high choloester
+cho_type <- temp4[temp4$TOLDHI2 =='Yes',]%>% group_by(type,SEX)%>% 
+    summarize(total_cho_type = n())%>%drop_na(type)
+ 
+#join those two tables
+type_drink$total_cho_type<-cho_type$total_cho_type
+
+type_drink$percent <- 100*(type_drink$total_cho_type / type_drink$total_type)
+
+```
+
+(Further analysis between drinking behavior and blood cholesterol level is shown in the Executive Summary Section.)
+
+## Executive summary 
+#### 1. Blood cholesterol level
+```{r}
+edu<-DT[,c('EDUCA')]
+edu$EDUCA=factor(edu$EDUCA)
+levels(edu$EDUCA)=c("No School or Only Kindergarten", "Grades 1-8", "Grades 9-11", "High school graduate", "College 1-3","College 4+","Refused")
+new <- cbind(blood_checked, edu)
+
+SV<-new%>% group_by(TOLDHI2, EDUCA) %>% summarize(count=n())
+S<-new %>% group_by(EDUCA) %>% summarize(count=n())
+list2 <- rep(S$count,length(SV$EDUCA))
+list3 <- data.frame(SV,total = list2)
+list3["percentage"] <- 100*list3$count/list3$total
+YN<-list3[list3$TOLDHI2=='Yes',]
+
+theme_dotplot <- theme_bw(15) +
+    theme(axis.text.y = element_text(size = rel(.90)),
+          axis.ticks.y = element_blank(),
+          axis.title.x = element_text(size = rel(.75)),
+          panel.grid.major.x = element_blank(),
+          panel.grid.major.y = element_line(size = 0.5),
+          panel.grid.minor.x = element_blank())
+YN<-YN %>% subset(YN$EDUCA!='Refused' & YN$EDUCA!='No School or Only Kindergarten')
+g <- ggplot(YN, aes(x = percentage, y = fct_reorder(EDUCA, percentage))) +
+    geom_point(color = "blue", size = 3) + ylab("Education Level") +xlab('Percentage')+
+    theme_dotplot + ggtitle("Proportion of people has high blood cholesterol",
+          subtitle = "by different education level")+coord_cartesian(xlim = c(0:40)) + 
+    theme(plot.title = element_text(size=16))
+g
+```
+
+We want to analyze the proportion of people who have high blood cholesterol level within each group of different education level. We used five education levels, which are Grades 1-8, Grades 9-11, Grades 12/High school graduate, college 1-3 years, college 4+ years. Within each group, there are a different number of people who have high blood cholesterol level. However, we can't directly plot the number of people with high blood cholesterol level within each group, since the total number of people in each education group is different. So we are interested in the proportion of people with high blood cholesterol level within different education level groups. In the graph, we can see that the higher education level a person is at, the less proportion of people who have high blood cholesterol. One possible interpretation could be that a person with a higher level of educational background tends to focus more on maintaining a good health status than people with a lower level of educational background. People with a higher level of educational background are more likely to be paid more, so they have more money or leisure time to do exercise, go to see good doctors and eat healthy food more often.
+
+#### 2. Consumption of vegetables and fruits
+
+```{r}
+gridExtra::grid.arrange(g_juice,g_fruit,g_bean,g_vege,ncol=2,nrow=2, top='The percentages of high cholesterol v.s. different diet options')
+```
+
+The result shows that the diet option could be an influential factor regarding blood cholesterol level. Specifically, the correlation between fruit consumption and cholesterol level is the strongest among the four, since the percent of people with high blood cholesterol level decreases as one has more fruit. Juice can also be considered as a relevant factor. However, the consumption of beans and vegetables has little-to-no correlation with blood cholesterol levels. Fruit and juice contain a high level of vitamin C, which may be the key ingredient of reducing blood cholesterol level.
+
+#### 3. Tobacco
+```{r}
+df$smoker_status <- factor(df$smoker_status,
+                           levels = df$smoker_status[order(df$Percentage)])
+
+ggplot(df, aes(x = smoker_status, y = 100*Percentage)) + theme_bw() + geom_bar(stat='identity', fill = "#CCB8E6") +  xlab('Smoker Status') + ylab('Percentage') + labs(title = 'Distribution of high blood cholesterol level with respect to Smoker Status') + theme(plot.title = element_text(hjust = 0.5)) 
+ 
+```
+
+By computing the percentage of people with high blood cholesterol level in each smokers status, we find that nonsmokers have the lowest percentage while the highest percentage is former smokers followed by everyday smokers — this indicates that smoking may relate to one's blood cholesterol level. The founding of the graph aligns with our common knowledge of how smoking would raise cholesterol level. One interesting finding is that the percent of people who have high blood cholesterol level within the former-smokers group is higher than within an everyday-smoker group. One interpretation could be that although former smokers have quitted smoking, they may have smoked for a long period of time, smoking already deteriorated their health before they quit. Therefore, they still have the highest percentage of people who have high blood cholesterol level. 
+
+#### 4. Alcohol
+```{r}
+ggplot(type_drink, aes(x = type, y = percent)) +
+  geom_bar(position = "dodge", stat = "identity", fill = "#ED9C4C")+
+  ggtitle("Different type of drinkers who has high blood cholesterol in United States") +
+  labs(y = "Percent", x= "Type of drinkers", caption = "Source: CDC 2015 BRFSS data") +
+  theme(plot.title = element_text(face = "bold")) +
+  theme(plot.subtitle = element_text(face = "bold", color = "grey35")) +
+  theme(plot.caption = element_text(color = "grey68"))
+```
+
+The conditional probability of high blood cholesterol level on alcohol-consumption levels is a good way to demonstrate the effect of alcohol on cholesterol. Surprisingly, the result shows that alcohol consumption is a non-negative influential factor in reducing cholesterol levels; female heavy drinker group has the lowest percentage while male light drinker group has the highest percentage of people with high blood cholesterol level. This may be explained by that a proper amount of alcohol may be beneficial to blood circulation, since some alcohol has certain beneficial components to people's health which depends on the types of alcohol.
+
+## Interactive Component
+
+We display an interactive map graph where states are colored by the percentage of people has high blood cholesterol level among the surveyee of each state. The state with a higher percentage is coded with a darker color so that the user could have a sense of the general distribution pattern of high blood cholesterol level among the United States. We use Shiny to construct our interactive graph. Our goal is to let users be able to compare the association between blood cholesterol level and different health factors across different states. When the user **hovers** the mouse on each state in the map, a text box will appear, displaying the information on the important factors--percent of people that are a heavy drinker, smoker and fruit hater in that state separately. When the user **clicks** a state, a bar plot will show up displaying the same value, which is convenient for the user to compare different health factors between states. In the future, we would separate consumption of those factors into three levels--high, median, low and create a scrollbar. When users check different level, the state in that level will be highlighted. In other words, users can compare the percentage of high blood cholesterol across different states within the same level of consumption of alcohol/tobacco/fruit.
+
+[Interactive application](https://usbloodcholesterol.shinyapps.io/final_final_health/) 
+
+
+## Conclusion
+
+In our study, we analyze several factors that were commonly seen as affecting blood cholesterol level. Some findings are cohesive with our common sense, but some are not. For instance, we find out that light drinker has a higher proportion of people who have high blood cholesterol level than heavy drinkers. This finding contradicts with our common knowledge of how over-drinking can cause one having high blood cholesterol level. One possible explanation could be that alcohol may be beneficial to blood circulation. Since we don't have information about what type of alcohol a surveyee mostly drink, we are unable to analyze if different types of alcohol is affecting the blood cholesterol level. And further interpretation requires more medical background.
+
+There are still other factors that may be influential, such as exercise, or mental status. In the future, we hope to analyze other factors to see if there are correlations between blood cholesterol level and those potential factors. A limitation in our analysis is that we only can assess data collected in one year. If we have a twenty-year dataset, then we can plot the time series to analyze the trend over the years.
+
+
+
